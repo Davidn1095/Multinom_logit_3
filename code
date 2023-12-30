@@ -1,0 +1,68 @@
+# Load the dplyr package for data manipulation
+library(dplyr)
+
+# Define the data vectors for the DataFrame
+presion <- c("Optima", "Optima", "Optima", "Normal", "Normal", "Normal", "Alta", "Alta", "Alta", "Descompensada", "Descompensada", "Descompensada")
+imc <- c("Normal", "Sobrepeso", "Obesidad", "Normal", "Sobrepeso", "Obesidad", "Normal", "Sobrepeso", "Obesidad", "Normal", "Sobrepeso", "Obesidad")
+frecuencia <- c(41, 15, 0, 16, 12, 1, 8, 8, 1, 46, 44, 8)
+
+# Create a DataFrame from the defined vectors
+Chapman.Tabla.Frame <- data.frame(Presion = presion, IMC = imc, Frecuencia = frecuencia)
+
+# Print the DataFrame to the console
+print(Chapman.Tabla.Frame)
+
+# Convert 'Presion' and 'IMC' columns to factors with defined levels
+Chapman.Tabla.Frame$Presion <- factor(Chapman.Tabla.Frame$Presion, levels = c("Optima", "Normal", "Alta", "Descompensada"))
+Chapman.Tabla.Frame$IMC <- factor(Chapman.Tabla.Frame$IMC, levels = c("Normal", "Sobrepeso", "Obesidad"))
+
+# Fit a multinomial logistic regression model using 'Presion' as response and 'IMC' as predictor, using 'Frecuencia' as weights
+Ajuste.Multinom.Tab <- multinom(Presion ~ IMC, data = Chapman.Tabla.Frame, weights = Frecuencia)
+
+# Display a summary of the fitted multinomial logistic regression model
+summary(Ajuste.Multinom.Tab)
+
+# Exponentiate the model coefficients to obtain odds ratios
+exp(summary(Ajuste.Multinom.Tab)$coefficients)
+
+# Compare two multinomial logistic models (one with only an intercept and another with 'IMC' as predictor) using ANOVA
+anova(multinom(Presion ~ 1, data = Chapman.Tabla.Frame, weights = Frecuencia), multinom(Presion ~ IMC, data = Chapman.Tabla.Frame, weights = Frecuencia))
+
+# Calculate and exponentiate confidence intervals for model parameters
+exp(confint(Ajuste.Multinom.Tab))
+
+# Predict the probabilities for each observation using the fitted model
+predict(Ajuste.Multinom.Tab, type = "probs")
+
+# Predict the class for each observation using the fitted model
+predict(Ajuste.Multinom.Tab, type = "class")
+
+# Create a contingency table comparing actual 'Presion' categories with the predicted ones, accounting for 'Frecuencia'
+table(rep(Chapman.Tabla.Frame$Presion, Chapman.Tabla.Frame$Frecuencia), rep(predict(Ajuste.Multinom.Tab, type = "class"), Chapman.Tabla.Frame$Frecuencia))
+
+# Define observed frequencies
+frecuencias_observadas <- c(41, 16, 8, 46, 15, 12, 8, 44, 0, 1, 1, 8)
+
+# Define predicted probabilities from a "saturated model"
+probabilidades_predichas <- c(0.3693694, 0.1441441, 0.0720721, 0.4144144, 0.1898734, 0.1518987, 0.1012658, 0.556962, 0, 0.1, 0.1, 0.8)
+
+# Identify valid indices where observed frequencies and predicted probabilities are non-zero
+indices_validos <- frecuencias_observadas > 0 & probabilidades_predichas > 0
+
+# Filter valid frequencies and probabilities
+frecuencias_validas <- frecuencias_observadas[indices_validos]
+probabilidades_validas <- probabilidades_predichas[indices_validos]
+
+# Recalculate the log-likelihood for the valid cases of the saturated model
+log_verosimilitud_valida <- sum(frecuencias_validas * log(probabilidades_validas))
+
+# Calculate the deviance of the saturated model for valid cases
+deviance_saturado_valido <- -2 * log_verosimilitud_valida
+deviance_saturado_valido
+
+# Calculate the test statistic by subtracting valid saturated model deviance from model deviance
+Estadistico <- Ajuste.Multinom.Tab$deviance - deviance_saturado_valido
+Estadistico
+
+# Compute the p-value using a chi-square test for the test statistic with 3 degrees of freedom
+pchisq(Estadistico, 3, lower.tail = F)
